@@ -1,0 +1,526 @@
+import asyncio
+import random
+import time
+import aiosqlite
+from datetime import date
+from aiogram import Bot, Dispatcher, F
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
+from aiogram.filters import Command
+
+# ============ НАСТРОЙКИ ============
+BOT_TOKEN = "8799597892:AAEBltBkv_XrfTIm05bd4WTvKMRhl51IhHA"
+CHANNEL_URL = "https://t.me/BlatnomerNews"
+ROLL_COOLDOWN = 3
+# ===================================
+
+PLATES = [
+    # 🏛️ ПРАВИТЕЛЬСТВЕННЫЕ — АМР 97
+    {"code": "А001МР", "region": 97, "rarity": "🏛️ Правительственный", "owner": "Шувалов", "chance": 0.002, "price": 8000000},
+    {"code": "А002МР", "region": 97, "rarity": "🏛️ Правительственный", "owner": "Володин", "chance": 0.002, "price": 7500000},
+    {"code": "А003МР", "region": 97, "rarity": "🏛️ Правительственный", "owner": "Козак", "chance": 0.002, "price": 7000000},
+    {"code": "А004МР", "region": 97, "rarity": "🏛️ Правительственный", "owner": "Жуков", "chance": 0.002, "price": 6500000},
+    {"code": "А005МР", "region": 97, "rarity": "🏛️ Правительственный", "owner": "Рогозин", "chance": 0.002, "price": 6000000},
+    {"code": "А007МР", "region": 97, "rarity": "🏛️ Правительственный", "owner": "Набиуллина", "chance": 0.002, "price": 5500000},
+    {"code": "А014МР", "region": 97, "rarity": "🏛️ Правительственный", "owner": "Шойгу", "chance": 0.002, "price": 9000000},
+    {"code": "А079МР", "region": 97, "rarity": "🏛️ Правительственный", "owner": "Песков", "chance": 0.002, "price": 5000000},
+    {"code": "А124МР", "region": 97, "rarity": "🏛️ Правительственный", "owner": "Жириновский", "chance": 0.002, "price": 4500000},
+    {"code": "А143МР", "region": 97, "rarity": "🏛️ Правительственный", "owner": "Бастрыкин", "chance": 0.002, "price": 5000000},
+    {"code": "А057АА", "region": 97, "rarity": "💎 Кремлёвский", "owner": "Антон Вайно", "chance": 0.003, "price": 12000000},
+    {"code": "А057МР", "region": 97, "rarity": "💎 Кремлёвский", "owner": "Антон Вайно", "chance": 0.003, "price": 10000000},
+    {"code": "ЕКХ001", "region": 77, "rarity": "🏛️ ФСО", "owner": "ФСО", "chance": 0.002, "price": 8000000},
+    {"code": "ЕКХ777", "region": 77, "rarity": "🏛️ ФСБ", "owner": "ФСБ", "chance": 0.002, "price": 8500000},
+
+    # 🎥 БЛОГЕРЫ
+    {"code": "В088ВВ", "region": 39, "rarity": "🎥 Блогер", "owner": "Паша Пэл", "chance": 0.01, "price": 350000},
+    {"code": "В777ОР", "region": 39, "rarity": "🎥 Блогер", "owner": "Паша Пэл", "chance": 0.01, "price": 320000},
+    {"code": "О066ОО", "region": 39, "rarity": "🎥 Блогер", "owner": "Паша Пэл", "chance": 0.01, "price": 300000},
+    {"code": "Н751ЕТ", "region": 39, "rarity": "🎥 Блогер", "owner": "Паша Пэл", "chance": 0.01, "price": 280000},
+    {"code": "Н666НН", "region": 99, "rarity": "🎥 Блогер", "owner": "Моргенштерн", "chance": 0.01, "price": 250000},
+    {"code": "А4444А", "region": 77, "rarity": "🎥 Блогер", "owner": "Влад А4", "chance": 0.01, "price": 250000},
+    {"code": "Ж444ЖЖ", "region": 99, "rarity": "🎥 Блогер", "owner": "Жекич Дубровский", "chance": 0.01, "price": 200000},
+    {"code": "С525СС", "region": 77, "rarity": "🎥 Блогер", "owner": "Валерий Меладзе", "chance": 0.01, "price": 180000},
+    {"code": "С001АМР", "region": 77, "rarity": "🎥 Блогер", "owner": "Валерий Сюткин", "chance": 0.01, "price": 180000},
+    {"code": "О887ОО", "region": 98, "rarity": "🎥 Блогер", "owner": "Саня Булкин", "chance": 0.01, "price": 150000},
+    {"code": "Х444ВМ", "region": 750, "rarity": "🎥 Блогер", "owner": "Жекич Дубровский", "chance": 0.01, "price": 150000},
+    {"code": "М707ММ", "region": 78, "rarity": "🎥 Блогер", "owner": "Давидыч", "chance": 0.01, "price": 140000},
+    {"code": "Т988АН", "region": 790, "rarity": "🎥 Блогер", "owner": "Subo", "chance": 0.01, "price": 130000},
+    {"code": "О777ОО", "region": 95, "rarity": "🎥 Блогер", "owner": "Асхаб Тамаев", "chance": 0.01, "price": 120000},
+    {"code": "Х001АМ", "region": 77, "rarity": "🎥 Блогер", "owner": "Паша Воля", "chance": 0.01, "price": 120000},
+    {"code": "М001МЛ", "region": 99, "rarity": "🎥 Блогер", "owner": "Михаил Литвин", "chance": 0.01, "price": 400000},
+    {"code": "Д001МС", "region": 77, "rarity": "🎥 Блогер", "owner": "Дима Масленников", "chance": 0.01, "price": 350000},
+    {"code": "Т001ТМ", "region": 95, "rarity": "🎥 Блогер", "owner": "Асхаб Тамаев", "chance": 0.01, "price": 300000},
+    {"code": "Л001ЛЧ", "region": 77, "rarity": "🎥 Блогер", "owner": "Лерчек", "chance": 0.01, "price": 280000},
+    {"code": "К001КК", "region": 77, "rarity": "🎥 Блогер", "owner": "Клава Кока", "chance": 0.01, "price": 250000},
+    {"code": "С001СБ", "region": 77, "rarity": "🎥 Блогер", "owner": "Ксения Собчак", "chance": 0.01, "price": 300000},
+    {"code": "В001ВК", "region": 61, "rarity": "🎥 Блогер", "owner": "Валя Карнавал", "chance": 0.01, "price": 220000},
+    {"code": "Э001ЭД", "region": 99, "rarity": "🎥 Блогер", "owner": "Эльдар Джарахов", "chance": 0.01, "price": 200000},
+    {"code": "Х001ХХ", "region": 99, "rarity": "🎥 Блогер", "owner": "Хабиб Нурмагомедов", "chance": 0.01, "price": 500000},
+    {"code": "А001АБ", "region": 77, "rarity": "🎥 Блогер", "owner": "Александр Гудков", "chance": 0.01, "price": 180000},
+    {"code": "Г001ГХ", "region": 77, "rarity": "🎥 Блогер", "owner": "Гарик Харламов", "chance": 0.01, "price": 180000},
+    {"code": "О001ОБ", "region": 77, "rarity": "🎥 Блогер", "owner": "Ольга Бузова", "chance": 0.01, "price": 200000},
+    {"code": "Д001ДД", "region": 77, "rarity": "🎥 Блогер", "owner": "Джиган", "chance": 0.01, "price": 180000},
+    {"code": "С001СМ", "region": 77, "rarity": "🎥 Блогер", "owner": "Оксана Самойлова", "chance": 0.01, "price": 180000},
+
+    # 🎥 ЗНАМЕНИТОСТИ
+    {"code": "О022СА", "region": 98, "rarity": "🎥 Знаменитость", "owner": "Михаил Боярский", "chance": 0.01, "price": 200000},
+    {"code": "А007АА", "region": 177, "rarity": "🎥 Знаменитость", "owner": "Михаил Барщевский", "chance": 0.01, "price": 180000},
+    {"code": "О099ОО", "region": 78, "rarity": "🎥 Знаменитость", "owner": "Городок", "chance": 0.01, "price": 150000},
+    {"code": "М777ММ", "region": 99, "rarity": "🎥 Знаменитость", "owner": "Иосиф Кобзон", "chance": 0.01, "price": 350000},
+    {"code": "К001ТО", "region": 98, "rarity": "🎥 Знаменитость", "owner": "Евгений Плющенко", "chance": 0.01, "price": 180000},
+    {"code": "О070ОО", "region": 97, "rarity": "🎥 Знаменитость", "owner": "Максим Галкин", "chance": 0.01, "price": 200000},
+    {"code": "Х190ОЕ", "region": 97, "rarity": "🎥 Знаменитость", "owner": "Егор Титов", "chance": 0.01, "price": 120000},
+    {"code": "С396СС", "region": 77, "rarity": "🎥 Знаменитость", "owner": "Данко", "chance": 0.01, "price": 100000},
+    {"code": "У888УУ", "region": 99, "rarity": "🎥 Знаменитость", "owner": "Александр Буйнов", "chance": 0.01, "price": 150000},
+    {"code": "О707НТ", "region": 177, "rarity": "🎥 Знаменитость", "owner": "Владимир Турчинский", "chance": 0.01, "price": 120000},
+    {"code": "Р285НА", "region": 177, "rarity": "🎥 Знаменитость", "owner": "Тимур Родригез", "chance": 0.01, "price": 120000},
+    {"code": "А757МР", "region": 77, "rarity": "🎥 Знаменитость", "owner": "Надежда Михалкова", "chance": 0.01, "price": 100000},
+    {"code": "Х578ВХ", "region": 199, "rarity": "🎥 Знаменитость", "owner": "Валерия", "chance": 0.01, "price": 150000},
+    {"code": "О808КО", "region": 78, "rarity": "🎥 Знаменитость", "owner": "Ксения Собчак", "chance": 0.01, "price": 180000},
+
+    # 👑 ОСОБЫЕ
+    {"code": "Х615ЕВ", "region": 55, "rarity": "🏆 Мишкин", "owner": "Мишка", "chance": 0.005, "price": 1000000},
+    {"code": "Б001ББ", "region": 77, "rarity": "👑 Админский", "owner": "Админ", "chance": 0.003, "price": 800000},
+
+    # 💎 ЭПИЧЕСКИЕ
+    {"code": "О001ОО", "region": 77, "rarity": "💎 Блатной", "owner": "", "chance": 0.01, "price": 150000},
+    {"code": "С001СС", "region": 99, "rarity": "💎 Блатной", "owner": "", "chance": 0.01, "price": 140000},
+    {"code": "М001ММ", "region": 77, "rarity": "💎 Блатной", "owner": "", "chance": 0.01, "price": 130000},
+    {"code": "К001КК", "region": 99, "rarity": "💎 Блатной", "owner": "", "chance": 0.01, "price": 120000},
+    {"code": "Н001НН", "region": 77, "rarity": "💎 Блатной", "owner": "", "chance": 0.01, "price": 110000},
+
+    # 🔥 РЕДКИЕ
+    {"code": "А777АА", "region": 99, "rarity": "🔥 Красивый", "owner": "", "chance": 0.03, "price": 40000},
+    {"code": "В777ВВ", "region": 77, "rarity": "🔥 Красивый", "owner": "", "chance": 0.03, "price": 35000},
+    {"code": "Е777КХ", "region": 50, "rarity": "🔥 Красивый", "owner": "", "chance": 0.03, "price": 30000},
+    {"code": "С777СС", "region": 99, "rarity": "🔥 Красивый", "owner": "", "chance": 0.03, "price": 26000},
+    {"code": "А123АА", "region": 99, "rarity": "🔥 Красивый", "owner": "", "chance": 0.03, "price": 20000},
+    {"code": "В456ВВ", "region": 77, "rarity": "🔥 Красивый", "owner": "", "chance": 0.03, "price": 18000},
+    {"code": "К789КК", "region": 99, "rarity": "🔥 Красивый", "owner": "", "chance": 0.03, "price": 15000},
+
+    # ⭐ НЕОБЫЧНЫЕ
+    {"code": "А111АА", "region": 99, "rarity": "⭐ Необычный", "owner": "", "chance": 0.06, "price": 5000},
+    {"code": "В222ВВ", "region": 77, "rarity": "⭐ Необычный", "owner": "", "chance": 0.06, "price": 4500},
+    {"code": "Е333КХ", "region": 50, "rarity": "⭐ Необычный", "owner": "", "chance": 0.06, "price": 4000},
+    {"code": "М444ММ", "region": 77, "rarity": "⭐ Необычный", "owner": "", "chance": 0.06, "price": 3500},
+    {"code": "О555ОО", "region": 99, "rarity": "⭐ Необычный", "owner": "", "chance": 0.06, "price": 3000},
+    {"code": "Т666ТТ", "region": 47, "rarity": "⭐ Необычный", "owner": "", "chance": 0.06, "price": 2500},
+    {"code": "Н888НН", "region": 77, "rarity": "⭐ Необычный", "owner": "", "chance": 0.06, "price": 2000},
+
+    # ⚪ ОБЫЧНЫЕ
+    {"code": "А123ВС", "region": 99, "rarity": "⚪ Обычный", "owner": "", "chance": 0.17, "price": 500},
+    {"code": "В456ОР", "region": 77, "rarity": "⚪ Обычный", "owner": "", "chance": 0.17, "price": 450},
+    {"code": "Е789КХ", "region": 50, "rarity": "⚪ Обычный", "owner": "", "chance": 0.17, "price": 400},
+    {"code": "М012ММ", "region": 78, "rarity": "⚪ Обычный", "owner": "", "chance": 0.17, "price": 350},
+    {"code": "Т345УК", "region": 47, "rarity": "⚪ Обычный", "owner": "", "chance": 0.17, "price": 300},
+]
+
+last_roll = {}
+
+bot = Bot(token=BOT_TOKEN)
+dp = Dispatcher()
+
+
+async def init_db():
+    async with aiosqlite.connect("blatnomer.db") as db:
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                user_id INTEGER PRIMARY KEY,
+                username TEXT,
+                balance INTEGER DEFAULT 1000,
+                total_rolls INTEGER DEFAULT 0,
+                last_bonus TEXT DEFAULT '',
+                bonus_day INTEGER DEFAULT 0,
+                referrer_id INTEGER DEFAULT 0,
+                referrals INTEGER DEFAULT 0
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS inventory (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                code TEXT,
+                region INTEGER,
+                rarity TEXT,
+                owner TEXT,
+                listed INTEGER DEFAULT 0
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS auction (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                seller_id INTEGER,
+                inventory_id INTEGER,
+                price INTEGER,
+                sold INTEGER DEFAULT 0
+            )
+        """)
+        await db.commit()
+
+
+async def get_user(user_id, username=None):
+    async with aiosqlite.connect("blatnomer.db") as db:
+        cur = await db.execute("SELECT * FROM users WHERE user_id=?", (user_id,))
+        user = await cur.fetchone()
+        if not user:
+            await db.execute(
+                "INSERT INTO users (user_id, username) VALUES (?, ?)",
+                (user_id, username or "no_name")
+            )
+            await db.commit()
+            cur = await db.execute("SELECT * FROM users WHERE user_id=?", (user_id,))
+            user = await cur.fetchone()
+        return user
+
+
+def main_menu():
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🎰 Крутить номер", callback_data="roll")],
+        [InlineKeyboardButton(text="🚗 Мой гараж", callback_data="garage")],
+        [InlineKeyboardButton(text="💰 Барахолка", callback_data="auction")],
+        [InlineKeyboardButton(text="🎁 Бонус дня", callback_data="bonus")],
+        [InlineKeyboardButton(text="🏆 Топ игроков", callback_data="top")],
+        [InlineKeyboardButton(text="👤 Профиль", callback_data="profile")],
+        [InlineKeyboardButton(text="📢 Наш канал", url=CHANNEL_URL)],
+    ])
+    return kb
+
+
+@dp.message(Command("start"))
+async def cmd_start(message: Message):
+    args = message.text.split()
+    referrer_id = 0
+    if len(args) > 1 and args[1].startswith("ref"):
+        try:
+            referrer_id = int(args[1][3:])
+        except ValueError:
+            referrer_id = 0
+
+    user = await get_user(message.from_user.id, message.from_user.username or "no_name")
+
+    if referrer_id and referrer_id != message.from_user.id:
+        async with aiosqlite.connect("blatnomer.db") as db:
+            cur = await db.execute("SELECT referrer_id FROM users WHERE user_id=?", (message.from_user.id,))
+            row = await cur.fetchone()
+            if row and row[0] == 0:
+                await db.execute(
+                    "UPDATE users SET referrer_id=?, balance=balance+300 WHERE user_id=?",
+                    (referrer_id, message.from_user.id)
+                )
+                await db.execute(
+                    "UPDATE users SET balance=balance+500, referrals=referrals+1 WHERE user_id=?",
+                    (referrer_id,)
+                )
+                await db.commit()
+                try:
+                    await bot.send_message(referrer_id, "👥 По твоей ссылке пришёл новый игрок!\n+500 монет 💰")
+                except Exception:
+                    pass
+
+    await message.answer(
+        "🚗💨 Добро пожаловать в <b>БЛАТНОМЕР</b>!\n\n"
+        "Тут выбивают самые блатные номера России.\n"
+        "Крути, собирай, продавай другим пацанам.\n\n"
+        "Жми «Крутить» — и погнали! 🔥",
+        reply_markup=main_menu(),
+        parse_mode="HTML"
+    )
+
+
+@dp.callback_query(F.data == "menu")
+async def back_to_menu(call: CallbackQuery):
+    await call.message.edit_text("🚗 Главное меню:", reply_markup=main_menu())
+
+
+@dp.callback_query(F.data == "profile")
+async def profile(call: CallbackQuery):
+    user = await get_user(call.from_user.id)
+    async with aiosqlite.connect("blatnomer.db") as db:
+        cur = await db.execute("SELECT COUNT(*) FROM inventory WHERE user_id=?", (call.from_user.id,))
+        count = (await cur.fetchone())[0]
+    text = (
+        f"👤 <b>Профиль</b>\n\n"
+        f"🆔 ID: <code>{user[0]}</code>\n"
+        f"💰 Баланс: <b>{user[2]}</b> монет\n"
+        f"🚗 Номеров в гараже: <b>{count}</b>\n"
+        f"🎰 Всего круток: <b>{user[3]}</b>\n"
+        f"👥 Приглашено друзей: <b>{user[7]}</b>"
+    )
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="👥 Пригласить друга", callback_data="referral")],
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data="menu")],
+    ])
+    await call.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+
+
+@dp.callback_query(F.data == "referral")
+async def referral(call: CallbackQuery):
+    link = f"https://t.me/{(await bot.get_me()).username}?start=ref{call.from_user.id}"
+    text = (
+        f"👥 <b>Пригласи друга!</b>\n\n"
+        f"За каждого друга ты получаешь <b>+500 монет</b>,\n"
+        f"а друг — <b>+300 монет</b> на старте.\n\n"
+        f"🔗 Твоя ссылка:\n<code>{link}</code>"
+    )
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data="profile")]
+    ])
+    await call.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+
+
+BONUSES = [100, 200, 300, 500, 700, 900, 1000]
+
+@dp.callback_query(F.data == "bonus")
+async def bonus(call: CallbackQuery):
+    user = await get_user(call.from_user.id)
+    today = date.today().isoformat()
+
+    if user[4] == today:
+        await call.answer("⏳ Бонус уже получен сегодня! Приходи завтра.", show_alert=True)
+        return
+
+    bonus_day = user[5]
+    if user[4]:
+        yesterday = date.fromordinal(date.today().toordinal() - 1).isoformat()
+        if user[4] != yesterday:
+            bonus_day = 0
+    bonus_day = min(bonus_day, 6)
+    amount = BONUSES[bonus_day]
+
+    async with aiosqlite.connect("blatnomer.db") as db:
+        await db.execute(
+            "UPDATE users SET balance=balance+?, last_bonus=?, bonus_day=? WHERE user_id=?",
+            (amount, today, bonus_day + 1, call.from_user.id)
+        )
+        await db.commit()
+
+    next_day = min(bonus_day + 1, 6)
+    text = (
+        f"🎁 <b>Бонус дня получен!</b>\n\n"
+        f"💰 +{amount} монет\n"
+        f"📅 День: <b>{bonus_day + 1}/7</b>\n\n"
+        f"Завтра получишь <b>{BONUSES[next_day]}</b> монет."
+    )
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⬅️ В меню", callback_data="menu")]
+    ])
+    await call.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+
+
+def roll_plate():
+    r = random.random()
+    acc = 0
+    for p in PLATES:
+        acc += p["chance"]
+        if r <= acc:
+            return p
+    return PLATES[-1]
+
+
+@dp.callback_query(F.data == "roll")
+async def roll(call: CallbackQuery):
+    user_id = call.from_user.id
+    now = time.time()
+
+    if user_id in last_roll:
+        diff = now - last_roll[user_id]
+        if diff < ROLL_COOLDOWN:
+            wait = int(ROLL_COOLDOWN - diff) + 1
+            await call.answer(f"⏳ Подожди {wait} сек.", show_alert=True)
+            return
+
+    last_roll[user_id] = now
+    plate = roll_plate()
+
+    async with aiosqlite.connect("blatnomer.db") as db:
+        await db.execute(
+            "INSERT INTO inventory (user_id, code, region, rarity, owner) VALUES (?, ?, ?, ?, ?)",
+            (user_id, plate["code"], plate["region"], plate["rarity"], plate.get("owner", ""))
+        )
+        await db.execute("UPDATE users SET total_rolls = total_rolls + 1 WHERE user_id=?", (user_id,))
+        await db.commit()
+
+    if plate.get("owner"):
+        if plate["rarity"] == "🏆 Мишкин":
+            text = (
+                f"🔥🔥🔥 <b>ЛЕГЕНДА ВЫПАЛА!</b> 🔥🔥🔥\n\n"
+                f"🚘 <b>{plate['code']} {plate['region']}</b>\n"
+                f"{plate['rarity']} — принадлежит <b>{plate['owner']}</b>\n"
+                f"💵 Цена: <b>{plate['price']}</b> монет"
+            )
+        else:
+            text = (
+                f"🎉 Тебе выпал номер:\n\n"
+                f"🚘 <b>{plate['code']} {plate['region']}</b>\n"
+                f"{plate['rarity']} — принадлежит <b>{plate['owner']}</b>\n"
+                f"💵 Цена: <b>{plate['price']}</b> монет"
+            )
+    else:
+        text = (
+            f"🎉 Тебе выпал номер:\n\n"
+            f"🚘 <b>{plate['code']} {plate['region']}</b>\n"
+            f"{plate['rarity']}\n"
+            f"💵 Цена: <b>{plate['price']}</b> монет"
+        )
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="🎰 Ещё раз", callback_data="roll")],
+        [InlineKeyboardButton(text="⬅️ В меню", callback_data="menu")],
+    ])
+    await call.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+
+
+@dp.callback_query(F.data == "garage")
+async def garage(call: CallbackQuery):
+    async with aiosqlite.connect("blatnomer.db") as db:
+        cur = await db.execute(
+            "SELECT id, code, region, rarity, owner, listed FROM inventory WHERE user_id=? ORDER BY id DESC LIMIT 10",
+            (call.from_user.id,)
+        )
+        items = await cur.fetchall()
+
+    if not items:
+        text = "🚗 Гараж пуст. Крути номера!"
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="🎰 Крутить", callback_data="roll")],
+            [InlineKeyboardButton(text="⬅️ Назад", callback_data="menu")],
+        ])
+        await call.message.edit_text(text, reply_markup=kb)
+        return
+
+    text = "🚗 <b>Твой гараж</b> (последние 10):\n\n"
+    for it in items:
+        owner_text = f" | 👤 {it[4]}" if it[4] else ""
+        status = "💰 На барахолке" if it[5] else "✅ В гараже"
+        text += f"#{it[0]} — <b>{it[1]} {it[2]}</b> | {it[3]}{owner_text} | {status}\n"
+
+    buttons = []
+    for it in items:
+        if not it[5]:
+            buttons.append([InlineKeyboardButton(
+                text=f"💰 Продать #{it[0]} {it[1]}",
+                callback_data=f"sell_{it[0]}"
+            )])
+    buttons.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="menu")])
+    kb = InlineKeyboardMarkup(inline_keyboard=buttons)
+    await call.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+
+
+@dp.callback_query(F.data.startswith("sell_"))
+async def sell(call: CallbackQuery):
+    inv_id = int(call.data.split("_")[1])
+    async with aiosqlite.connect("blatnomer.db") as db:
+        cur = await db.execute(
+            "SELECT code, region, rarity, owner FROM inventory WHERE id=? AND user_id=? AND listed=0",
+            (inv_id, call.from_user.id)
+        )
+        item = await cur.fetchone()
+        if not item:
+            await call.answer("Этот номер уже продан или выставлен", show_alert=True)
+            return
+
+        price = next((p["price"] for p in PLATES if p["code"] == item[0] and p["region"] == item[1]), 500)
+        await db.execute(
+            "INSERT INTO auction (seller_id, inventory_id, price) VALUES (?, ?, ?)",
+            (call.from_user.id, inv_id, price)
+        )
+        await db.execute("UPDATE inventory SET listed=1 WHERE id=?", (inv_id,))
+        await db.commit()
+
+    await call.answer(f"✅ Выставлено за {price} монет!", show_alert=True)
+    await garage(call)
+
+
+@dp.callback_query(F.data == "auction")
+async def auction(call: CallbackQuery):
+    async with aiosqlite.connect("blatnomer.db") as db:
+        cur = await db.execute("""
+            SELECT a.id, i.code, i.region, i.rarity, i.owner, a.price, u.username
+            FROM auction a
+            JOIN inventory i ON i.id = a.inventory_id
+            JOIN users u ON u.user_id = a.seller_id
+            WHERE a.sold = 0 AND a.seller_id != ?
+            ORDER BY a.price DESC LIMIT 10
+        """, (call.from_user.id,))
+        lots = await cur.fetchall()
+
+    if not lots:
+        text = "💰 Барахолка пуста. Никто пока не продаёт номера."
+        kb = InlineKeyboardMarkup(inline_keyboard=[
+            [InlineKeyboardButton(text="⬅️ Назад", callback_data="menu")]
+        ])
+        await call.message.edit_text(text, reply_markup=kb)
+        return
+
+    text = "💰 <b>Барахолка:</b>\n\n"
+    buttons = []
+    for lot in lots:
+        owner_text = f" | 👤 {lot[4]}" if lot[4] else ""
+        text += f"#{lot[0]} — <b>{lot[1]} {lot[2]}</b> | {lot[3]}{owner_text} | <b>{lot[5]}</b> монет | @{lot[6]}\n"
+        buttons.append([InlineKeyboardButton(
+            text=f"🛒 Купить #{lot[0]} за {lot[5]}",
+            callback_data=f"buy_{lot[0]}"
+        )])
+    buttons.append([InlineKeyboardButton(text="⬅️ Назад", callback_data="menu")])
+    kb = InlineKeyboardMarkup(inline_keyboard=buttons)
+    await call.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+
+
+@dp.callback_query(F.data.startswith("buy_"))
+async def buy(call: CallbackQuery):
+    auction_id = int(call.data.split("_")[1])
+    async with aiosqlite.connect("blatnomer.db") as db:
+        cur = await db.execute(
+            "SELECT seller_id, inventory_id, price FROM auction WHERE id=? AND sold=0",
+            (auction_id,)
+        )
+        lot = await cur.fetchone()
+        if not lot:
+            await call.answer("Лот уже продан", show_alert=True)
+            return
+
+        seller_id, inv_id, price = lot
+        cur = await db.execute("SELECT balance FROM users WHERE user_id=?", (call.from_user.id,))
+        balance = (await cur.fetchone())[0]
+        if balance < price:
+            await call.answer("Недостаточно монет!", show_alert=True)
+            return
+
+        await db.execute("UPDATE users SET balance = balance - ? WHERE user_id=?", (price, call.from_user.id))
+        await db.execute("UPDATE users SET balance = balance + ? WHERE user_id=?", (price, seller_id))
+        await db.execute("UPDATE inventory SET user_id=?, listed=0 WHERE id=?", (call.from_user.id, inv_id))
+        await db.execute("UPDATE auction SET sold=1 WHERE id=?", (auction_id,))
+        await db.commit()
+
+    await call.answer("✅ Куплено!", show_alert=True)
+    await auction(call)
+
+
+@dp.callback_query(F.data == "top")
+async def top(call: CallbackQuery):
+    async with aiosqlite.connect("blatnomer.db") as db:
+        cur = await db.execute("""
+            SELECT username, balance, total_rolls
+            FROM users
+            ORDER BY balance DESC LIMIT 10
+        """)
+        users = await cur.fetchall()
+
+    text = "🏆 <b>Топ-10 игроков по балансу:</b>\n\n"
+    for i, u in enumerate(users, 1):
+        medal = "🥇" if i == 1 else "🥈" if i == 2 else "🥉" if i == 3 else f"{i}."
+        text += f"{medal} @{u[0]} — <b>{u[1]}</b> монет (круток: {u[2]})\n"
+
+    kb = InlineKeyboardMarkup(inline_keyboard=[
+        [InlineKeyboardButton(text="⬅️ Назад", callback_data="menu")]
+    ])
+    await call.message.edit_text(text, reply_markup=kb, parse_mode="HTML")
+
+
+async def main():
+    await init_db()
+    print("✅ Бот «БлатНомер» запущен!")
+    await dp.start_polling(bot)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
